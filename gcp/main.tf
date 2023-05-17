@@ -121,9 +121,14 @@ resource "google_dns_record_set" "alcanza-cname-www" {
 }
 
 #* --- Cloud VPC
-resource "google_compute_network" "prod-network" {
-  name = "prod-network"
+resource "google_compute_network" "gke-network" {
+  name = "gke-network"
   description = "Main VPC network used for the Kubernetes cluster"
   auto_create_subnetworks = false
   delete_default_routes_on_create = true
+  routing_mode = "GLOBAL"
+}
+
+resource "google_compute_subnetwork" "gke-subnet" {
+  
 }

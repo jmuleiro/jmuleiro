@@ -16,6 +16,21 @@ variable "zone" {
   default = ""
 }
 
+#* --- Metadata
+variable "tags" {
+  type = list(string)
+  description = "List of tags to use for all resources, whenever possible"
+  default = ["terraform"]
+}
+
+variable "labels" {
+  type = map(string)
+  description = "Map of labels to use for all resources, whenever possible"
+  default = {
+    "maintained_by" = "terraform"
+  }
+}
+
 #* --- Cloud DNS
 variable "jmuleiro_domain" {
   type = string

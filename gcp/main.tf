@@ -5,16 +5,22 @@ provider "google" {
   zone = var.zone
 }
 
+#* --- Locals
+locals {
+  services_range_name = "cluster-services-range"
+  pods_range_name = "cluster-pods-range"
+}
+
+#* --- APIs
+#TODO: add api resources
+
 #* --- Cloud DNS
 #** jmuleiro.com
 resource "google_dns_managed_zone" "jmuleiro" {
   name = "jmuleiro-com"
   dns_name = var.jmuleiro_domain
   description = "Main domain DNS zone"
-  labels = {
-    "project" = "jmuleiro"
-    "created_by" = "terraform"
-  }
+  labels = var.labels
 }
 
 resource "google_dns_record_set" "jmuleiro-mx" {
@@ -71,10 +77,7 @@ resource "google_dns_managed_zone" "alcanza" {
   name = "alcanza-poesia"
   dns_name = var.alcanza_domain
   description = "Main domain zone for La Poesia Alcanza para Todos"
-  labels = {
-    "project" = "alcanza-poesia"
-    "created_by" = "terraform"
-  }
+  labels = var.labels
 }
 
 resource "google_dns_record_set" "alcanza-a" {
@@ -130,5 +133,79 @@ resource "google_compute_network" "gke-network" {
 }
 
 resource "google_compute_subnetwork" "gke-subnet" {
+  name = "gke-subnet"
+  ip_cidr_range = "10.255.0.0/16"
+  network = google_compute_network.gke-network.id
   
+  secondary_ip_range {
+    range_name = local.pods_range_name
+    ip_cidr_range = "10.0.0.0/16"
+  }
+
+  secondary_ip_range {
+    range_name = local.services_range_name
+    ip_cidr_range = "10.64.0.0/16"
+  }
+}
+
+#* --- IAM
+resource "google_service_account" "gke-cluster" {
+  account_id = "gke"
+  display_name = "GKE Service Account"
+  description = "Google Kubernetes Engine Service Account"
+}
+
+resource "google_project_iam_custom_role" "gke-cluster" {
+  role_id = "jmuleiro.gke"
+  title = "Google Kubernetes Engine Cluster"
+  description = "Custom role for GKE clusters. Should not be attached to non-system service accounts"
+  permissions = [
+    #TODO: lookup permissions
+  ]
+}
+
+#* --- GKE
+resource "google_container_cluster" "main-cluster" {
+  #? Metadata
+  name = "jmuleiro-prod"
+  description = "GKE cluster used for hosting multiple projects"
+
+  #? Cluster configurations
+  initial_node_count = 1
+  remove_default_node_pool = true
+  location = var.zone
+  min_master_version = "1.24.11-gke.1000"
+  release_channel {
+    channel = "STABLE"
+  }
+
+  #? Network configurations
+  networking_mode = "VPC_NATIVE"
+  network = google_compute_network.gke-network.self_link
+  subnetwork = google_compute_subnetwork.gke-subnet.self_link
+  ip_allocation_policy {
+    cluster_secondary_range_name = local.pods_range_name
+    services_secondary_range_name = local.services_range_name
+  }
+
+  #? Addons & Features
+  addons_config {
+    horizontal_pod_autoscaling {
+      disabled = true
+    }
+    http_load_balancing {
+      disabled = true
+    }
+    gce_persistent_disk_csi_driver_config {
+      enabled = true
+    }
+  }
+  logging_config {
+    enable_components = []
+  }
+  logging_service = "none"
+  monitoring_config {
+    enable_components = []
+  }
+  monitoring_service = "none"
 }

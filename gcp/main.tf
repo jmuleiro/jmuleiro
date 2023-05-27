@@ -12,7 +12,36 @@ locals {
 }
 
 #* --- APIs
-#TODO: add api resources
+resource "google_project_service" "storage" {
+  project = var.project
+  services = "storage.googleapis.com"
+  disable_dependent_services = true
+}
+
+resource "google_project_service" "iam" {
+  project = var.project
+  service = "iam.googleapis.com"
+  disable_dependent_services = true
+  disable_on_destroy = false
+}
+
+resource "google_project_service" "gce" {
+  project = var.project
+  service = "compute.googleapis.com"
+  disable_dependent_services = true
+}
+
+resource "google_project_service" "gke" {
+  project = var.project
+  service = "container.googleapis.com"
+  disable_dependent_services = true
+}
+
+resource "google_project_service" "dns" {
+  project = var.project
+  service = "dns.googleapis.com"
+  disable_dependent_services = true
+}
 
 #* --- Cloud DNS
 #** jmuleiro.com
@@ -60,7 +89,18 @@ resource "google_dns_record_set" "jmuleiro-txt" {
     "google-site-verification=UQwonYrFpWnz6H5CMUrTznPShb4zNKSJSaza083DpBU"
   ]
 }
-#TODO: add gmail domain key & enable dmarc
+
+resource "google_dns_record_set" "jmuleiro-dkim" {
+  name = "google._domainkey.${google_dns_managed_zone.jmuleiro.dns_name}"
+  managed_zone = google_dns_managed_zone.jmuleiro.name
+  type = "TXT"
+  ttl = 300
+
+  rrdatas = [
+    "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiKcqRnfdurVWunVbN80MrUBheZO+GcFJQIhbeMRh/O2zUNvUCW7HL6EoKNSVuzYf+qLa35dIW6Q1zBj4IfyGSOVz+krx9uFoAYeSaO59rBXCgjt68suzmHpRXtKiFX5anaLV8ROLxOmCxY4NgzL7JbfybtOXgm6fHL9twCTBjxNIaRb4NxQcsqAzp5xRTUwaWdfQ3Yt9ml8cIp5gGT8x5VGFAeOWks8P5IzgQ8L+wxD/znwkh1qqUW4FR9LSBOEzLo/WGYRa9U33bVx4xuhuuu67+kWw03Qt39/4eZZg2YSiWwTRQ1o3C5Unuh6Tj9iLlMzJP5sp7ECXSeA8Ob9DnwIDAQAB"
+  ]
+}
+
 resource "google_dns_record_set" "jmuleiro-dmarc" {
   name = "_dmarc.${google_dns_managed_zone.jmuleiro.dns_name}"
   managed_zone = google_dns_managed_zone.jmuleiro.name
@@ -160,7 +200,28 @@ resource "google_project_iam_custom_role" "gke-cluster" {
   title = "Google Kubernetes Engine Cluster"
   description = "Custom role for GKE clusters. Should not be attached to non-system service accounts"
   permissions = [
-    #TODO: lookup permissions
+    "monitoring.timeSeries.list",
+    "monitoring.metricDescriptors.create",
+    "artifactregistry.repositories.downloadArtifacts",
+    "autoscaling.sites.writeMetrics",
+    "logging.logEntries.create",
+    "monitoring.metricDescriptors.list",
+    "monitoring.timeSeries.create",
+    "storage.objects.get",
+    "storage.objects.list",
+    "appengine.applications.get",
+    "appengine.instances.get",
+    "appengine.instances.list",
+    "appengine.operations.get",
+    "appengine.operations.list",
+    "appengine.services.get",
+    "appengine.services.list",
+    "appengine.versions.create",
+    "appengine.versions.get",
+    "appengine.versions.list",
+    "resourcemanager.projects.get",
+    "resourcemanager.projects.list",
+    "serviceusage.services.use"
   ]
 }
 
@@ -208,4 +269,30 @@ resource "google_container_cluster" "main-cluster" {
     enable_components = []
   }
   monitoring_service = "none"
+}
+
+resource "google_container_node_pool" "prod-main-0" {
+  cluster = google_container_cluster.main-cluster.name
+  location = var.zone
+  name = "prod-main-0"
+  node_count = 1
+
+  node_locations = [
+    var.zone
+  ]
+
+  node_config {
+    disk_size_gb = 15
+    disk_type = "pd-balanced"
+    image_type = "cos_containerd"
+    local_ssd_count = 0
+    machine_type = "e2-highcpu-2"
+    spot = false
+    preemptible = false
+    service_account = google_service_account.gke-cluster.email
+  }
+}
+
+resource "google_container_node_pool" "prod-main-1" {
+  
 }

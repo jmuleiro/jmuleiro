@@ -43,6 +43,12 @@ resource "google_project_service" "dns" {
   disable_dependent_services = true
 }
 
+resource "google_project_service" "artifact_registry" {
+  project = var.project
+  service = "artifactregistry.googleapis.com"
+  disable_dependent_services = true
+}
+
 #* --- Cloud DNS
 #** jmuleiro.com
 resource "google_dns_managed_zone" "jmuleiro" {
@@ -225,6 +231,17 @@ resource "google_project_iam_custom_role" "gke-cluster" {
   ]
 }
 
+#* --- Artifact Registry
+resource "google_artifact_registry_repository" "alcanza_docker" {
+  depends_on = [ google_project_service.artifact_registry ]
+  repository_id = "alcanza-poesia"
+  format = "DOCKER"
+  location = var.region
+  description = "Alcanza Poesia"
+  labels = merge(var.labels, {"project": "alcanza"})
+  docker_config {}
+}
+
 #* --- GKE
 resource "google_container_cluster" "main-cluster" {
   #? Metadata
@@ -280,9 +297,19 @@ resource "google_container_node_pool" "prod-main-0" {
   node_locations = [
     var.zone
   ]
-
+  management {
+    auto_repair = true
+    auto_upgrade = true
+  }
+  network_config {
+    enable_private_nodes = true
+  }
+  upgrade_settings {
+    max_surge = 1
+    max_unavailable = 0
+  }
   node_config {
-    disk_size_gb = 15
+    disk_size_gb = 20
     disk_type = "pd-balanced"
     image_type = "cos_containerd"
     local_ssd_count = 0
@@ -290,9 +317,42 @@ resource "google_container_node_pool" "prod-main-0" {
     spot = false
     preemptible = false
     service_account = google_service_account.gke-cluster.email
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform"
+    ]
   }
 }
 
 resource "google_container_node_pool" "prod-main-1" {
-  
+  cluster = google_container_cluster.main-cluster.name
+  location = var.zone
+  name = "prod-main-1"
+  node_count = 1
+  node_locations = [
+    var.zone
+  ]
+  management {
+    auto_repair = true
+    auto_upgrade = true
+  }
+  network_config {
+    enable_private_nodes = true
+  }
+  upgrade_settings {
+    max_surge = 1
+    max_unavailable = 0
+  }
+  node_config {
+    disk_size_gb = 20
+    disk_type = "pd-balanced"
+    image_type = "cos_containerd"
+    local_ssd_count = 0
+    machine_type = "n1-standard-1"
+    spot = false
+    preemtible = false
+    service_account = google_service_account.gke-cluster.email
+    oauth_scopes = [
+      "https://www.googleapis.com/auth/cloud-platform"
+    ]
+  }
 }

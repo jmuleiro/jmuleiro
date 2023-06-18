@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql-wordpress
+  namespace: mysql
+  labels:
+    database: ""
+    type: mysql
+    db: mysql-wp
+spec:
+  selector:
+    matchLabels:
+      db: mysql-wp
+  serviceName: <ServiceName>
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        database: ""
+        type: mysql
+        db: mysql-wp
+    spec:
+      containers:
+      - name: main
+        image: mysql:8.0-debian
+        ports:
+          - containerPort: 3306
+            name: mysql
+        volumeMounts:
+          - name: data
+            mountPath: /var/lib/mysql
+          - name: config
+            mountPath: /etc/mysql/conf.d/mysql.cnf
+#            subPath: mysql.cnf
+      volumes:
+        - name: config
+          configMap:
+            name: mysql-wordpress
+            items:
+              - key: mysql.cnf
+                path: mysql.cnf
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 5G

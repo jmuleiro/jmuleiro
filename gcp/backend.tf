@@ -1,6 +1,6 @@
 terraform {
   backend "gcs" {
-    bucket = "jmuleiro-tfstate-prod"
+    bucket = "jmuleiro-tfstate"
     prefix = "state/jmuleiro"
   }
   

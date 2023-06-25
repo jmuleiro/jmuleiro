@@ -23,5 +23,8 @@ spec:
         - namespaceSelector:
             matchLabels:
               project: alcanzapoesia
-      #TODO ports
-      #ports:
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080

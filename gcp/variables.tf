@@ -35,21 +35,21 @@ variable "labels" {
 variable "jmuleiro_domain" {
   type = string
   description = "Jmuleiro domain name"
-  default = "jmuleiro.com"
-  validation {
-    condition = can(regex("^(?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.(?:[A-Za-z]{2}(?:\\.[A-Za-z]{2})?)$", var.jmuleiro_domain))
-    error_message = "Invalid domain name"
-  }
+  default = "jmuleiro.com."
+#  validation {
+#    condition = can(regex("^(?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.(?:[A-Za-z]{2}(?:\\.[A-Za-z]{2})?)$", var.jmuleiro_domain))
+#    error_message = "Invalid domain name"
+#  }
 }
 
 variable "alcanza_domain" {
   type = string
   description = "Alcanza Poesia domain name"
-  default = "lapoesiaalcanza.com.ar"
-  validation {
-    condition = can(regex("^(?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.(?:[A-Za-z]{2}(?:\\.[A-Za-z]{2})?)$", var.alcanza_domain))
-    error_message = "Invalid domain name"
-  }
+  default = "lapoesiaalcanza.com.ar."
+#  validation {
+#    condition = can(regex("^(?!-)[A-Za-z0-9-]{1,63}(?<!-)\\.(?:[A-Za-z]{2}(?:\\.[A-Za-z]{2})?)$", var.alcanza_domain))
+#    error_message = "Invalid domain name"
+#  }
 }
 
 variable "alcanza_ip" {

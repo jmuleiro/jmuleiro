@@ -14,7 +14,7 @@ locals {
 #* --- APIs
 resource "google_project_service" "storage" {
   project = var.project
-  services = "storage.googleapis.com"
+  service = "storage.googleapis.com"
   disable_dependent_services = true
 }
 
@@ -196,7 +196,7 @@ resource "google_compute_subnetwork" "gke-subnet" {
 
 #* --- IAM
 resource "google_service_account" "gke-cluster" {
-  account_id = "gke"
+  account_id = "google-kubernetes-engine"
   display_name = "GKE Service Account"
   description = "Google Kubernetes Engine Service Account"
 }
@@ -349,7 +349,7 @@ resource "google_container_node_pool" "prod-main-1" {
     local_ssd_count = 0
     machine_type = "n1-standard-1"
     spot = false
-    preemtible = false
+    preemptible = false
     service_account = google_service_account.gke-cluster.email
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"

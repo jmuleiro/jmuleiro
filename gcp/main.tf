@@ -165,7 +165,7 @@ resource "google_dns_record_set" "alcanza-cname-www" {
   ttl = 300
 
   rrdatas = [
-    "${var.alcanza_domain}."
+    "${var.alcanza_domain}"
   ]
 }
 
@@ -226,7 +226,6 @@ resource "google_project_iam_custom_role" "gke-cluster" {
     "appengine.versions.get",
     "appengine.versions.list",
     "resourcemanager.projects.get",
-    "resourcemanager.projects.list",
     "serviceusage.services.use"
   ]
 }
@@ -252,7 +251,7 @@ resource "google_container_cluster" "main-cluster" {
   initial_node_count = 1
   remove_default_node_pool = true
   location = var.zone
-  min_master_version = "1.24.11-gke.1000"
+  min_master_version = "1.26.5-gke.1200"
   release_channel {
     channel = "STABLE"
   }
@@ -281,11 +280,11 @@ resource "google_container_cluster" "main-cluster" {
   logging_config {
     enable_components = []
   }
-  logging_service = "none"
+  #logging_service = "none"
   monitoring_config {
     enable_components = []
   }
-  monitoring_service = "none"
+  #monitoring_service = "none"
 }
 
 resource "google_container_node_pool" "prod-main-0" {

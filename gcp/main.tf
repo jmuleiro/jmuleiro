@@ -235,6 +235,11 @@ resource "google_project_iam_custom_role" "gke-cluster" {
   ]
 }
 
+resource "google_project_iam_member" "gke-cluster" {
+  project = var.project
+  role = "projects/${var.project}/roles/${google_project_iam_custom_role.gke-cluster.role_id}"
+  member = "serviceAccount:${google_service_account.gke-cluster.email}"
+}
 #* --- Artifact Registry
 resource "google_artifact_registry_repository" "alcanza_docker" {
   depends_on = [ google_project_service.artifact_registry ]
@@ -256,7 +261,6 @@ resource "google_container_cluster" "main-cluster" {
   initial_node_count = 1
   remove_default_node_pool = true
   location = var.zone
-  min_master_version = "1.26.5-gke.1200"
   release_channel {
     channel = "STABLE"
   }
@@ -297,6 +301,7 @@ resource "google_container_node_pool" "prod-main-0" {
   location = var.zone
   name = "prod-main-0"
   node_count = 1
+  version = google_container_cluster.main-cluster.master_version
 
   node_locations = [
     var.zone
@@ -332,6 +337,8 @@ resource "google_container_node_pool" "prod-main-1" {
   location = var.zone
   name = "prod-main-1"
   node_count = 1
+  version = google_container_cluster.main-cluster.master_version
+  
   node_locations = [
     var.zone
   ]

@@ -13,4 +13,4 @@ spec:
   ports:
   - port: 3306
     targetPort: mysql
-  kind: ClusterIP
+  type: ClusterIP

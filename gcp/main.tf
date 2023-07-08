@@ -15,43 +15,44 @@ locals {
 resource "google_project_service" "storage" {
   project = var.project
   service = "storage.googleapis.com"
-  disable_dependent_services = true
+  disable_dependent_services = false
 }
 
 resource "google_project_service" "iam" {
   project = var.project
   service = "iam.googleapis.com"
-  disable_dependent_services = true
+  disable_dependent_services = false
   disable_on_destroy = false
 }
 
 resource "google_project_service" "gce" {
   project = var.project
   service = "compute.googleapis.com"
-  disable_dependent_services = true
+  disable_dependent_services = false
 }
 
 resource "google_project_service" "gke" {
   project = var.project
   service = "container.googleapis.com"
-  disable_dependent_services = true
+  disable_dependent_services = false
 }
 
 resource "google_project_service" "dns" {
   project = var.project
   service = "dns.googleapis.com"
-  disable_dependent_services = true
+  disable_dependent_services = false
 }
 
 resource "google_project_service" "artifact_registry" {
   project = var.project
   service = "artifactregistry.googleapis.com"
-  disable_dependent_services = true
+  disable_dependent_services = false
 }
 
 #* --- Cloud DNS
 #** jmuleiro.com
 resource "google_dns_managed_zone" "jmuleiro" {
+  depends_on = [ google_project_service.dns ]
   name = "jmuleiro-com"
   dns_name = var.jmuleiro_domain
   description = "Main domain DNS zone"
@@ -120,6 +121,7 @@ resource "google_dns_record_set" "jmuleiro-dmarc" {
 
 #** lapoesiaalcanza.com.ar
 resource "google_dns_managed_zone" "alcanza" {
+  depends_on = [ google_project_service.dns ]
   name = "alcanza-poesia"
   dns_name = var.alcanza_domain
   description = "Main domain zone for La Poesia Alcanza para Todos"
@@ -171,6 +173,7 @@ resource "google_dns_record_set" "alcanza-cname-www" {
 
 #* --- Cloud VPC
 resource "google_compute_network" "gke-network" {
+  depends_on = [ google_project_service.gce ]
   name = "gke-network"
   description = "Main VPC network used for the Kubernetes cluster"
   auto_create_subnetworks = false
@@ -196,12 +199,14 @@ resource "google_compute_subnetwork" "gke-subnet" {
 
 #* --- IAM
 resource "google_service_account" "gke-cluster" {
+  depends_on = [ google_project_service.iam ]
   account_id = "google-kubernetes-engine"
   display_name = "GKE Service Account"
   description = "Google Kubernetes Engine Service Account"
 }
 
 resource "google_project_iam_custom_role" "gke-cluster" {
+  depends_on = [ google_project_service.iam ]
   role_id = "jmuleiro.gke"
   title = "Google Kubernetes Engine Cluster"
   description = "Custom role for GKE clusters. Should not be attached to non-system service accounts"
@@ -243,6 +248,7 @@ resource "google_artifact_registry_repository" "alcanza_docker" {
 
 #* --- GKE
 resource "google_container_cluster" "main-cluster" {
+  depends_on = [ google_project_service.gce, google_project_service.iam, google_project_service.gke ]
   #? Metadata
   name = "jmuleiro-prod"
   description = "GKE cluster used for hosting multiple projects"

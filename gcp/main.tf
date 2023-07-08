@@ -104,7 +104,7 @@ resource "google_dns_record_set" "jmuleiro-dkim" {
   ttl = 300
 
   rrdatas = [
-    "\"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiKcqRnfdurVWunVbN80MrUBheZO+GcFJQIhbeMRh/O2zUNvUCW7HL6EoKNSVuzYf+qLa35dIW6Q1zBj4IfyGSOVz+krx9uFoAYeSaO59rBXCgjt68suzmHpRXtKiFX5anaLV8ROLxOmCxY4NgzL7JbfybtOXgm6fHL9twCTBjxNIaRb4NxQcsqAzp5xRTUwaWdfQ3Yt9ml8cIp5gGT8x5VGFAeOWks8P5IzgQ8L+wxD/znwkh1qqUW4FR9LSBOEzLo/WGYRa9U33bVx4xuhuuu67+kWw03Qt39/4eZZg2YSiWwTRQ1o3C5Unuh6Tj9iLlMzJP5sp7ECXSeA8Ob9DnwIDAQAB\""
+    "\"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiKcqRnfdurVWunVbN80MrUBheZO+GcFJQIhbeMRh/O2zUNvUCW7HL6EoKNSVuzYf+qLa35dIW6Q1zBj4IfyGSOVz+\" \"krx9uFoAYeSaO59rBXCgjt68suzmHpRXtKiFX5anaLV8ROLxOmCxY4NgzL7JbfybtOXgm6fHL9twCTBjxNIaRb4NxQcsqAzp5xRTUwaWdfQ3Yt9ml8cIp5gGT8x5VGFAeOWks8P5IzgQ8L+wxD/znwkh1qqUW4FR9LSBOEzLo/WGYRa9U33bVx4xuhuuu67+kWw03Qt39/\" \"4eZZg2YSiWwTRQ1o3C5Unuh6Tj9iLlMzJP5sp7ECXSeA8Ob9DnwIDAQAB\""
   ]
 }
 
@@ -144,8 +144,8 @@ resource "google_dns_record_set" "alcanza-txt" {
   ttl = 300
 
   rrdatas = [
-    "v=spf1 -all",
-    "google-site-verification=MZTawTWDWHda0n-kXRxa31_Tc-Y2ixN5OHRNvrBuILY"
+    "\"v=spf1 -all\"",
+    "\"google-site-verification=MZTawTWDWHda0n-kXRxa31_Tc-Y2ixN5OHRNvrBuILY\""
   ]
 }
 

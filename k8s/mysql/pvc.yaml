@@ -14,5 +14,4 @@ spec:
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
-  storageClassName: ""
   volumeName: mysql-wordpress

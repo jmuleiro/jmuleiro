@@ -60,3 +60,15 @@ variable "alcanza_ip" {
     error_message = "Invalid IPv4 address format"
   }
 }
+
+#* --- Google Kubernetes Engine Cluster
+variable "cluster_version" {
+  type = string
+  description = "Google Kubernetes Engine cluster master version"
+  default = "1.26.5-gke.1200"
+}
+variable "cluster_ip_whitelist" {
+  type = list(string)
+  description = "List of IP addresses to whitelist for IAP access to the Kubernetes API"
+  default = [ "" ]
+}

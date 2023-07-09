@@ -9,6 +9,8 @@ provider "google" {
 locals {
   services_range_name = "cluster-services-range"
   pods_range_name = "cluster-pods-range"
+  master_range_name = "cluster-master-range"
+  master_range_cidr = "10.12.0.0/28"
 }
 
 #* --- APIs
@@ -183,18 +185,30 @@ resource "google_compute_network" "gke-network" {
 
 resource "google_compute_subnetwork" "gke-subnet" {
   name = "gke-subnet"
-  ip_cidr_range = "10.255.0.0/16"
+  ip_cidr_range = "10.0.0.0/24"
   network = google_compute_network.gke-network.id
   
   secondary_ip_range {
     range_name = local.pods_range_name
-    ip_cidr_range = "10.0.0.0/16"
+    ip_cidr_range = "10.10.0.0/21"
   }
 
   secondary_ip_range {
     range_name = local.services_range_name
-    ip_cidr_range = "10.64.0.0/16"
+    ip_cidr_range = "10.11.0.0/21"
   }
+  secondary_ip_range {
+    range_name = local.master_range_name
+    ip_cidr_range = local.master_range_cidr
+  }
+}
+
+resource "google_compute_address" "gke-master" {
+  name = "gke-master-internal"
+  address_type = "INTERNAL"
+  subnetwork = google_compute_subnetwork.gke-subnet.name
+  description = "Internal IP address for GKE master access through IAP"
+  address = "10.13.0.1"
 }
 
 #* --- IAM
@@ -254,13 +268,14 @@ resource "google_artifact_registry_repository" "alcanza_docker" {
 resource "google_container_cluster" "main-cluster" {
   depends_on = [ google_project_service.gce, google_project_service.iam, google_project_service.gke ]
   #? Metadata
-  name = "jmuleiro-prod"
+  name = "jmuleiro-prod-2"
   description = "GKE cluster used for hosting multiple projects"
 
   #? Cluster configurations
   initial_node_count = 1
   remove_default_node_pool = true
   location = var.zone
+  min_master_version = var.cluster_version
   release_channel {
     channel = "STABLE"
   }
@@ -269,9 +284,20 @@ resource "google_container_cluster" "main-cluster" {
   networking_mode = "VPC_NATIVE"
   network = google_compute_network.gke-network.self_link
   subnetwork = google_compute_subnetwork.gke-subnet.self_link
+  private_cluster_config {
+    enable_private_endpoint = true
+    enable_private_nodes = true
+    master_ipv4_cidr_block = local.master_range_cidr
+  }
   ip_allocation_policy {
     cluster_secondary_range_name = local.pods_range_name
     services_secondary_range_name = local.services_range_name
+  }
+  master_authorized_networks_config {
+    cidr_blocks {
+      cidr_block = "${google_compute_address.gke-master.address}/32"
+      display_name = "iap-proxy"
+    }
   }
 
   #? Addons & Features
@@ -289,11 +315,13 @@ resource "google_container_cluster" "main-cluster" {
   logging_config {
     enable_components = []
   }
-  #logging_service = "none"
   monitoring_config {
     enable_components = []
   }
-  #monitoring_service = "none"
+  vertical_pod_autoscaling {
+    enabled = false
+  }
+  enable_intranode_visibility = false
 }
 
 resource "google_container_node_pool" "prod-main-0" {
@@ -326,8 +354,13 @@ resource "google_container_node_pool" "prod-main-0" {
     spot = false
     preemptible = false
     service_account = google_service_account.gke-cluster.email
+    labels = merge(var.labels, {"kind": "gke"})
+    metadata = {
+      disable-legacy-endpoints = "true"
+    }
     oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring"
     ]
   }
 }
@@ -362,8 +395,30 @@ resource "google_container_node_pool" "prod-main-1" {
     spot = false
     preemptible = false
     service_account = google_service_account.gke-cluster.email
+    labels = merge(var.labels, {"kind": "gke"})
+    metadata = {
+      disable-legacy-endpoints = "true"
+    }
     oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring"
     ]
   }
 }
+
+#* --- Google Compute Firewall & IAP requirements
+resource "google_compute_firewall" "gke" {
+  name = "allow-ssh"
+  network = google_compute_network.gke-network.name
+  allow {
+    protocol = "tcp"
+    ports = ["22"]
+  }
+  source_ranges = var.cluster_ip_whitelist
+}
+resource "google_compute_router" "gke" {
+  name = "nat-router"
+  network = google_compute_network.gke-network.name
+}
+#TODO: add cloud NAT configs
+#terraform-google-modules/cloud-nat/google

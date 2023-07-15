@@ -9,8 +9,8 @@ provider "google" {
 locals {
   services_range_name = "cluster-services-range"
   pods_range_name = "cluster-pods-range"
-  master_range_name = "cluster-master-range"
-  master_range_cidr = "10.12.0.0/28"
+  #Usable Host IP Range:	10.10.7.1 - 10.10.7.14
+  master_range_cidr = "10.10.7.0/28"
 }
 
 #* --- APIs
@@ -185,30 +185,30 @@ resource "google_compute_network" "gke-network" {
 
 resource "google_compute_subnetwork" "gke-subnet" {
   name = "gke-subnet"
-  ip_cidr_range = "10.0.0.0/24"
+  # Usable Host IP Range:	10.10.0.1 - 10.10.63.254
+  ip_cidr_range = "10.10.0.0/18" 
   network = google_compute_network.gke-network.id
   
   secondary_ip_range {
     range_name = local.pods_range_name
-    ip_cidr_range = "10.10.0.0/21"
+    # Usable Host IP Range:	10.10.8.1 - 10.10.15.254
+    ip_cidr_range = "10.10.10.0/21"
   }
 
   secondary_ip_range {
     range_name = local.services_range_name
-    ip_cidr_range = "10.11.0.0/21"
-  }
-  secondary_ip_range {
-    range_name = local.master_range_name
-    ip_cidr_range = local.master_range_cidr
+    # Usable Host IP Range:	10.10.16.1 - 10.10.23.254
+    ip_cidr_range = "10.10.20.0/21"
   }
 }
-
+#TODO: review if this is necessary or it could be done some other way
+# with Cloud IAP
 resource "google_compute_address" "gke-master" {
   name = "gke-master-internal"
   address_type = "INTERNAL"
   subnetwork = google_compute_subnetwork.gke-subnet.name
   description = "Internal IP address for GKE master access through IAP"
-  address = "10.13.0.1"
+  address = "10.10.0.10"
 }
 
 #* --- IAM
@@ -268,12 +268,12 @@ resource "google_artifact_registry_repository" "alcanza_docker" {
 resource "google_container_cluster" "main-cluster" {
   depends_on = [ google_project_service.gce, google_project_service.iam, google_project_service.gke ]
   #? Metadata
-  name = "jmuleiro-prod-2"
+  name = "jmuleiro-prod-3"
   description = "GKE cluster used for hosting multiple projects"
 
   #? Cluster configurations
-  initial_node_count = 1
   remove_default_node_pool = true
+  initial_node_count = 1
   location = var.zone
   min_master_version = var.cluster_version
   release_channel {
@@ -322,6 +322,9 @@ resource "google_container_cluster" "main-cluster" {
     enabled = false
   }
   enable_intranode_visibility = false
+  timeouts {
+    create = "12m"
+  }
 }
 
 resource "google_container_node_pool" "prod-main-0" {
@@ -331,12 +334,12 @@ resource "google_container_node_pool" "prod-main-0" {
   node_count = 1
   version = google_container_cluster.main-cluster.master_version
 
-  node_locations = [
-    var.zone
-  ]
+#  node_locations = [
+#    var.zone
+#  ]
   management {
     auto_repair = true
-    auto_upgrade = true
+    auto_upgrade = false
   }
   network_config {
     enable_private_nodes = true
@@ -372,12 +375,12 @@ resource "google_container_node_pool" "prod-main-1" {
   node_count = 1
   version = google_container_cluster.main-cluster.master_version
   
-  node_locations = [
-    var.zone
-  ]
+#  node_locations = [
+#    var.zone
+#  ]
   management {
     auto_repair = true
-    auto_upgrade = true
+    auto_upgrade = false
   }
   network_config {
     enable_private_nodes = true
@@ -417,8 +420,19 @@ resource "google_compute_firewall" "gke" {
   source_ranges = var.cluster_ip_whitelist
 }
 resource "google_compute_router" "gke" {
-  name = "nat-router"
-  network = google_compute_network.gke-network.name
+  name = "gke-nat"
+  network = google_compute_network.gke-network.id
+  bgp {
+    asn = 64514
+  }
 }
-#TODO: add cloud NAT configs
-#terraform-google-modules/cloud-nat/google
+resource "google_compute_router_nat" "gke" {
+  name = "gke-nat"
+  router = google_compute_router.gke.name
+  nat_ip_allocate_option = "MANUAL_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+  log_config {
+    enable = false
+    filter = "ERRORS_ONLY"
+  }
+}

@@ -38,4 +38,5 @@ secret*.y*ml
 
 # GCP credentials
 credentials.json
+credentials2.json
 token.json

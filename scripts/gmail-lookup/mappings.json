@@ -1,0 +1,32 @@
+{
+  "mappings": {
+    "transfer": {
+      "pattern": "^You've transferred \\$(\\d{1,}\\.?\\d{1,2}) to ([a-zA-Z ]{1,}).*$",
+      "data": [
+        "amount",
+        "transferee"
+      ]
+    },
+    "swap": {
+      "pattern": "^Your (\\d{1,}\\.?\\d{1,}) ([A-Z]{1,5}) to \\$(\\d{1,}\\.?\\d{1,2}) swap.*$",
+      "data": [
+        "amount_from",
+        "currency_from",
+        "amount_to"
+      ]
+    },
+    "withdrawal": {
+      "pattern": "^You withdrew \\$(\\d{1,}\\.?\\d{1,2}) to your own account.*$",
+      "data": [
+        "amount"
+      ]
+    },
+    "purchase": {
+      "pattern": "^You made a \\$(\\d{1,}\\.?\\d{1,2}) purchase at (\\D{1,})\\D{3}$",
+      "data": [
+        "amount",
+        "store"
+      ]
+    }
+  }
+}

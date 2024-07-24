@@ -7,6 +7,20 @@
         "transferee"
       ]
     },
+    "incomingTransfer": {
+      "pattern": "^Your belo account received a transfer of \\$(\\d{1,}\\.?\\d{1,2}) from (\\D{1,})$",
+      "data": [
+        "amount",
+        "transferor"
+      ]
+    },
+    "refund": {
+      "pattern": "^You've received a \\$(\\d{1,}\\.?\\d{1,2}) refund for your purchase at (\\D{1,})$",
+      "data": [
+        "amount",
+        "reimburser"
+      ]
+    },
     "swap": {
       "pattern": "^Your (\\d{1,}\\.?\\d{1,}) ([A-Z]{1,5}) to \\$(\\d{1,}\\.?\\d{1,2}) swap.*$",
       "data": [

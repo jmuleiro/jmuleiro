@@ -1,6 +1,6 @@
 {
   "mappings": {
-    "transfer": {
+    "outgoingTransfer": {
       "pattern": "^You've transferred \\$(\\d{1,}\\.?\\d{1,2}) to ([a-zA-Z ]{1,}).*$",
       "data": [
         "amount",
@@ -22,7 +22,7 @@
       ]
     },
     "purchase": {
-      "pattern": "^You made a \\$(\\d{1,}\\.?\\d{1,2}) purchase at (\\D{1,})\\D{3}$",
+      "pattern": "^You made a \\$(\\d{1,}\\.?\\d{1,2}) purchase at (.{1,})$",
       "data": [
         "amount",
         "store"

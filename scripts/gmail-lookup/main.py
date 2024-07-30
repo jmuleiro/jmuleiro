@@ -1,5 +1,4 @@
 # Ref https://docs.python.org/3/library/html.parser.html
-from html.parser import HTMLParser
 import os
 import re
 import json
@@ -7,21 +6,37 @@ import time
 import emoji
 import base64
 from logger import getLogger
+from jsonschema import validate
+from html.parser import HTMLParser
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-#? Setup logging
-log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))
+def init():
+  #? Globals
+  global log
+  global mappings
 
-#? Get JSON mappings
-log.debug("Getting mappings...")
-mappingsFile = os.getenv("MAPPINGS_FILE", "scripts/gmail-lookup/mappings.json")
-with open(mappingsFile, 'r') as stream:
-  mappings = json.loads(stream.read())["mappings"]
-log.debug(f"Got mappings from {mappingsFile}")
+  #? Setup logging
+  log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))
+  
+  #? Get JSON mappings
+  log.debug("Getting mappings...")
+  mappingsFile = os.getenv("MAPPINGS_FILE", "scripts/gmail-lookup/mappings.json")
+  with open(mappingsFile, 'r') as stream:
+    mappings = json.loads(stream.read())
+  log.debug(f"Got mappings from {mappingsFile}")
+
+  #? Mappings validation
+  log.debug("Validating mappings...")
+  schemaFile = os.getenv("SCHEMA_FILE", "scripts/gmail-lookup/schema.json")
+  with open(schemaFile, 'r') as stream:
+    schema = json.loads(stream.read())
+  validate(instance=mappings, schema=schema)
+  #todo: adapt processData() to new schema
+  exit(0)
 
 def processData(_d: str, mappings: dict):
   def appendMsg(_m: str, _t: str, _M: str) -> str:
@@ -51,7 +66,7 @@ class MailParser(HTMLParser):
     data = re.sub(r'\D{0,9}(?>\{.*\})|(?>\@\D.*)', '', data)
     #? Remove whitespaces and commas
     data = re.sub(r'\n|\r|\t|\0|,', '', data).strip()
-    processData(data, mappings)
+    processData(data, mappings["templates"])
 
 #* OAuth Scopes
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -132,4 +147,5 @@ query: {gmailQuery}
     log.critical(f"HttpError: {error}")
 
 if __name__ == "__main__":
+  init()
   main()

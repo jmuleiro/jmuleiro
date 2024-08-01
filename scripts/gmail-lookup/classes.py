@@ -1,10 +1,7 @@
-import os
 import re
 import emoji
 import logging as log
 from html.parser import HTMLParser
-#? Setup logging
-#log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))
 
 class EmailTemplate:
   """

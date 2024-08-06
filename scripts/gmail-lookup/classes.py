@@ -2,7 +2,7 @@ import re
 import emoji
 import logging as log
 from html.parser import HTMLParser
-from typing import Union
+from typing import Union, overload
 from prometheus_client import Counter, Gauge, Summary, Histogram, Info, Enum
 
 class EmailTemplate:
@@ -100,9 +100,24 @@ class MailParser(HTMLParser):
       log.error(f"Labels and capturing groups mismatch: Got {len(mapping.labels)} labels and {1 if type(result) != tuple else len(result)} capturing group")
       self.errorsCount.labels(name=mapping.metricName, description=mapping.description, metric=mapping.metric._name)
       return
+    
+    if type(result) == tuple:
+      # If result is tuple, we have at least 1 label aside from the metric value
+      labelValues = []
+      for i, match in enumerate(result[0]):
+        if mapping.labels[i] != "value":
+          labelValues.append(match)
+        else:
+          value = match
+      self.updateMetricWithLabels(mapping, labelValues, value)
+    else:
+      #self.updateMetricWithValue
+      pass
+  
+  def updateMetricWithLabels(self, mapping: MetricMapping, labelValues: list, value: any = 1):
     match mapping.metric.__qualname__:
       case Counter.__qualname__:
-        pass
+        mapping.metric.labels(labelValues).inc(value)
       case Summary.__qualname__:
         pass
       case Histogram.__qualname__:
@@ -113,3 +128,22 @@ class MailParser(HTMLParser):
         pass
       case Gauge.__qualname__ | _:
         pass
+class GaugeTs(Gauge):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+
+  #fyi https://github.com/prometheus/client_python/issues/588
+  #def collect(self):
+  #  metrics = super().collect()
+  #  for metric in metrics:
+  #    samples = []
+  #    for sample in metric.samples:
+  #      timestamp = sample.labels.pop("timestamp", None)
+  #      samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
+  #    metric.samples = samples
+  #  return metrics
+  
+  @overload
+  def set(self, value: float, timestamp: any | None) -> None:
+    self._raise_if_not_observable()
+    self._value.set(float(value), timestamp=timestamp)

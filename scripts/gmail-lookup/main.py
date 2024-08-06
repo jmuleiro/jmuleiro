@@ -16,6 +16,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 global log
 global mappings
 mappings: list[EmailTemplate] = []
+#todo: add prometheus server
+#todo: add flag for looking up old emails
+#todo: default old email lookup dates from and to to relative datetimes (i.e. from 1 month ago to today)
 
 #? Setup logging
 log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))

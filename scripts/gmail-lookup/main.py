@@ -5,7 +5,9 @@ import time
 import base64
 from logger import getLogger
 from jsonschema import validate
+from traceback import print_exc
 from classes import EmailTemplate, MailParser
+from prometheus_client import start_http_server
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.oauth2.credentials import Credentials
@@ -82,6 +84,9 @@ def main():
   exitCode = 0
 
   try:
+    #? Prometheus Server
+    start_http_server(int(os.getenv("PORT", "8000")))
+
     #? Build Gmail API
     log.info("Building Gmail API...")
     service = build("gmail", "v1", credentials=creds)
@@ -99,13 +104,14 @@ def main():
       nextPageToken = None
       log.debug("Iterating over results...")
       resultsCount = 0
+      parser = MailParser(mp)
       while True:
         log.debug(f"Results iteration no.: '{resultsCount :+= 1}'")
         response = service.users().threads().list(userId=gmailUserId, maxResults=gmailMaxResults, q=gmailQuery, pageToken=nextPageToken).execute()
         threads = response.get("threads", [])
         for thread in threads:
           data = (service.users().threads().get(userId=gmailUserId, id=thread["id"])).execute()
-          parser = MailParser(mp)
+          parser.timestamp = data["messages"][0]["internalDate"]
           parser.feed(base64.urlsafe_b64decode(data["messages"][0]["payload"]["body"]["data"]).decode())
 
         nextPageToken = response.get("nextPageToken", None)
@@ -117,14 +123,19 @@ def main():
         else:
           log.info("Got to the end of the list")
           break
+    time.sleep(3600)
     
   except HttpError as e:
     log.critical(f"HttpError: {e}")
+    print_exc()
     exitCode = 1
   except Exception as e:
     log.critical(f"{e.__class__.__name__}: {e}")
+    print_exc()
     exitCode = 1
   finally:
+    #server.shutdown()
+    #t.join()
     exit(exitCode)
 
 if __name__ == "__main__":

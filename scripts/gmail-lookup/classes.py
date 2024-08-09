@@ -97,6 +97,7 @@ class MailParser(HTMLParser):
   def processMapping(self, result: Union[list|str], mapping: MetricMapping):
     log.debug(f"Processing metric '{mapping.metricName}' type '{type(mapping.metric)}' with values: {result}, result type: {type(result)}")
     if (len(mapping.labels) == 1 and type(result) == list) or (len(mapping.labels) != 1 and type(result) == str):
+      #todo: investigate errors
       log.error(f"Labels and capturing groups mismatch: Got {len(mapping.labels)} labels and {1 if type(result) != list else len(result)} capturing group")
       self.errorsCount.labels(name=mapping.metricName, description=mapping.description, metric=mapping.metric._name)
       return

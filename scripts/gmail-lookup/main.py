@@ -19,8 +19,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 global log
 global mappings
 mappings: list[EmailTemplate] = []
-#todo: add prometheus server
-#todo: add flag for looking up old emails
+#todo: implement exporter-like server approach
 
 #? Setup logging
 log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))

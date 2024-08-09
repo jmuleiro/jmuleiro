@@ -44,12 +44,25 @@
           "name": "Belo Swap to ARS",
           "description": "Swap to ARS",
           "metric": {
-            "name": "belo_swap"
+            "name": "belo_swap_to_ars"
           },
           "labels": [
             "amount_from",
             "currency_from",
             "value"
+          ]
+        },
+        {
+          "pattern": "^Your \\$(\\d{1,}\\.?\\d{1,2}) to (\\d{1,}\\.?\\d{1,}) ([A-Z]{1,5}) swap.*$",
+          "name": "Belo Swap from ARS",
+          "description": "Swap from ARS",
+          "metric": {
+            "name": "belo_swap_from_ars"
+          },
+          "labels": [
+            "value",
+            "amount_to",
+            "currency_to"
           ]
         },
         {
@@ -73,6 +86,17 @@
           "labels": [
             "value",
             "store"
+          ]
+        },
+        {
+          "pattern": "^You received a deposit of \\$(\\d{1,}\\.?\\d{1,2})$",
+          "name": "Belo ARS Deposit",
+          "description": "Belo ARS deposit",
+          "metric": {
+            "name": "belo_ars_deposit"
+          },
+          "labels": [
+            "value"
           ]
         }
       ]

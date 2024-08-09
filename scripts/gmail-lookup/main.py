@@ -1,4 +1,5 @@
 # Ref https://docs.python.org/3/library/html.parser.html
+import re
 import os
 import json
 import time
@@ -20,35 +21,34 @@ global mappings
 mappings: list[EmailTemplate] = []
 #todo: add prometheus server
 #todo: add flag for looking up old emails
-#todo: default old email lookup dates from and to to relative datetimes (i.e. from 1 month ago to today)
 
 #? Setup logging
 log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))
 
 def init():
   #? Get JSON mappings
-  log.debug("Getting mappings...")
+  log.debug("Getting mappings")
   mappingsFile = os.getenv("MAPPINGS_FILE", "scripts/gmail-lookup/mappings.json")
   with open(mappingsFile, 'r') as stream:
     mappingsDict: dict = json.loads(stream.read())
   log.debug(f"Got mappings from {mappingsFile}")
 
   #? Mappings validation
-  log.debug("Getting schema...")
+  log.debug("Getting schema")
   schemaFile = os.getenv("SCHEMA_FILE", "scripts/gmail-lookup/schema.json")
   with open(schemaFile, 'r') as stream:
     schema = json.loads(stream.read())
-  log.debug(f"Got schema from {schemaFile}. Validating mappings...")
+  log.debug(f"Got schema from {schemaFile}. Validating mappings")
   validate(instance=mappingsDict, schema=schema)
   log.info("Mappings are valid")
   
-  log.debug("Parsing mappings...")
+  log.debug("Parsing mappings")
   for template in mappingsDict.get("templates"):
     mappings.append(EmailTemplate(template))
   log.debug("Mappings parse successful")
 
 def main():
-  log.debug("Getting credentials...")
+  log.debug("Getting credentials")
   creds = None
   SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
   tokenFile = os.getenv("OAUTH_TOKEN_FILENAME", "token.json")
@@ -62,7 +62,7 @@ def main():
   
   #? If credentials are invalid, log in
   if not creds or not creds.valid:
-    log.debug("Credentials are invalid, attempting refresh...")
+    log.debug("Credentials are invalid, attempting refresh")
     if creds and creds.expired and creds.refresh_token:
       creds.refresh(Request())
       log.debug("Refreshed credentials")
@@ -76,10 +76,30 @@ def main():
       token.write(creds.to_json())
       log.debug(f"Wrote token file to '{tokenFile}'")
 
+  gmailQuery = ""
   gmailMaxResults = os.getenv("GMAIL_RESULTS_PER_PAGE", "100")
   gmailUserId = os.getenv("GMAIL_USER_ID", "me")
-  # Date format: YYYY/MM/DD or MM/DD/YYYY
-  gmailDateFrom = os.getenv("GMAIL_DATE_FROM", "2024/05/31")
+  if os.getenv("BACKWARDS_LOOKUP", True):
+    dateRegex = r"^\d{2}\/\d{2}\/\d{4}$"
+    log.info("Backwards lookup is enabled")
+    from datetime import datetime, timedelta
+    if (gmailDateFrom := os.getenv("MAIL_DATE_FROM", False)):
+      if not (re.match(dateRegex, gmailDateFrom)
+              or datetime.strptime(gmailDateFrom, "%m/%d/%Y")): 
+        raise ValueError("Date from should be MM/DD/YYYY")
+    else:
+      gmailDateFrom = (datetime.now() - timedelta(os.getenv("MAIL_FROM_DAYS", 30))).strftime("%m/%d/%Y")
+    gmailQuery += f"after:{gmailDateFrom} "
+    
+    #? If MAIL_DATE_TO is not set lookup everything after gmailDateFrom
+    if (gmailDateTo := os.getenv("MAIL_DATE_TO", False)):
+      if not (re.match(dateRegex, gmailDateFrom)
+              or datetime.strptime(gmailDateTo, "%m/%d/%Y")):
+        raise ValueError("Date to should be MM/DD/YYYY")
+      gmailQuery += f"before:{gmailDateTo} "
+  else:
+    log.info("Backwards lookup is disabled")
+    
   gmailDateTo = os.getenv("GMAIL_DATE_TO", "2024/07/01")
   exitCode = 0
 
@@ -88,23 +108,19 @@ def main():
     start_http_server(int(os.getenv("PORT", "8000")))
 
     #? Build Gmail API
-    log.info("Building Gmail API...")
+    log.info("Building Gmail API")
     service = build("gmail", "v1", credentials=creds)
 
     log.debug(f"Iterating over {len(mappings)} templates")
     for i, mp in enumerate(mappings):
       log.debug(f"Template n°{i+1}")
-      gmailQuery = f"from: {mp.sender}"
-      if gmailDateFrom:
-        gmailQuery += f" after:{gmailDateFrom}"
-      if gmailDateTo:
-        gmailQuery += f" before:{gmailDateTo}"
-        log.debug(f"Parameters: maxResults: '{gmailMaxResults}', userId: '{gmailUserId}', dateFrom: '{gmailDateFrom}', dateTo: '{gmailDateTo}', query: '{gmailQuery}'")
-    
+      gmailQuery += f"from:{mp.sender} "
+      log.debug(f"Gmail Query: '{gmailQuery}', maxResults: '{gmailMaxResults}', userId: '{gmailUserId}'")
       nextPageToken = None
-      log.debug("Iterating over results...")
-      resultsCount = 0
+      log.debug("Creating new parser")
       parser = MailParser(mp)
+      log.debug("Iterating over results")
+      resultsCount = 0
       while True:
         log.debug(f"Results iteration no.: '{resultsCount :+= 1}'")
         response = service.users().threads().list(userId=gmailUserId, maxResults=gmailMaxResults, q=gmailQuery, pageToken=nextPageToken).execute()

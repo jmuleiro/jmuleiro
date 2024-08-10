@@ -23,7 +23,7 @@ class MetricMapping:
     self.pattern = mapping.get("pattern")
     self.name = mapping.get("name", "Default Metric Name")
     self.description = mapping.get("description", "Default Metric Description")
-    self.labels: list = mapping.get("labels")
+    self.labels: list = mapping.get("labels", [])
     self.metricName = mapping.get("metric").get("name")
     #todo: add schema properties for metric attributes 
     #todo: i.e. namespace, unit, etc.
@@ -89,39 +89,22 @@ class MailParser(HTMLParser):
   
   def processData(self, _d: str):
     for mp in self.template.mappings:
-      if result := re.findall(mp.pattern, _d):
-        self.processMapping(result, mp)
+      if result := re.search(mp.pattern, _d):
+        self.processMapping(result.groupdict(), mp)
         return
     log.warning(f"No mapping for '{_d}'")
   
-  def processMapping(self, result: Union[list|str], mapping: MetricMapping):
+  def processMapping(self, result: dict[str, str], mapping: MetricMapping):
     log.debug(f"Processing metric '{mapping.metricName}' type '{type(mapping.metric)}' with values: {result}, result type: {type(result)}")
-    if (len(mapping.labels) == 1 and type(result) == list) or (len(mapping.labels) != 1 and type(result) == str):
-      #todo: investigate errors
-      log.error(f"Labels and capturing groups mismatch: Got {len(mapping.labels)} labels and {1 if type(result) != list else len(result)} capturing group")
-      self.errorsCount.labels(name=mapping.metricName, description=mapping.description, metric=mapping.metric._name)
+    if (len(mapping.labels) and len(mapping.labels) != (len(result) - 1)):
+      log.error(f"Labels and capturing groups mismatch: Got {len(mapping.labels)} labels but {len(result)} groups (including value)")
+      self.errorsCount.labels(name=mapping.metricName, description=mapping.description, metric=mapping.metric._name).inc()
       return
     
-    if type(result) == list:
-      labels = {}
-      for i, match in enumerate(result[0]):
-        #todo: get rid of "value" label somehow
-        #if mapping.labels[i] != "value":
-        #  labels.update({
-        #    mapping.labels[i]: match
-        #  })
-        #else:
-        #  value = match
-        if mapping.labels[i] == "value":
-          value = float(match)
-        labels.update({
-          mapping.labels[i]: match
-        })
-      self.updateMetric(mapping, labels=labels, value=value)
-    else:
-      self.updateMetric(mapping, value=value)
+    value = float(result.pop("value"))
+    self.updateMetric(mapping, result, value)
   
-  def updateMetric(self, mapping: MetricMapping, labels: dict[str, str] = None, value: float = 1):
+  def updateMetric(self, mapping: MetricMapping, labels: dict[str, str], value: float = 1):
     match mapping.metric:
       case Counter():
         pass
@@ -134,10 +117,8 @@ class MailParser(HTMLParser):
       case Enum():
         pass
       case GaugeTs():
-        if labels:
-          mapping.metric.incTimestamped(labels, value, self.timestamp)
-        else:
-          mapping.metric.incTimestamped(value, self.timestamp)
+        mapping.metric.incTimestamped(labels, value, self.timestamp)
+
 class GaugeTs(Gauge):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
@@ -152,14 +133,6 @@ class GaugeTs(Gauge):
         samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
       metric.samples = samples
     return metrics
-
-  @overload
-  def incTimestamped(self, value: float, timestamp):
-    """
-    Increments a timestamped gauge's value
-    """
-    log.debug(f"Increment timestamped gauge value: {value}, timestamp: {timestamp}")
-    self.labels({"timestamp": timestamp}).inc(value)
 
   def incTimestamped(self, labels: dict[str, str], value: float, timestamp):
     """

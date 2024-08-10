@@ -67,8 +67,7 @@
       "additionalProperties": false,
       "required": [
         "pattern",
-        "metric",
-        "labels"
+        "metric"
       ],
       "properties": {
         "pattern": {
@@ -86,8 +85,7 @@
         "labels": {
           "type": "array",
           "uniqueItems": true,
-          "minItems": 1,
-          "maxItems": 9,
+          "maxItems": 15,
           "items": {
             "$ref": "#/$defs/label"
           }

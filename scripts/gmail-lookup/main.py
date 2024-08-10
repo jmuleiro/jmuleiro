@@ -104,7 +104,7 @@ def main():
 
   try:
     #? Prometheus Server
-    start_http_server(int(os.getenv("PORT", "8000")))
+    server, t = start_http_server(int(os.getenv("PORT", "8000")))
 
     #? Build Gmail API
     log.info("Building Gmail API")
@@ -149,8 +149,8 @@ def main():
     print_exc()
     exitCode = 1
   finally:
-    #server.shutdown()
-    #t.join()
+    server.shutdown()
+    t.join()
     exit(exitCode)
 
 if __name__ == "__main__":

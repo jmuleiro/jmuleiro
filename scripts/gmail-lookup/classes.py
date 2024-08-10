@@ -11,6 +11,7 @@ class EmailTemplate:
   """
   def __init__(self, template: dict) -> None:
     self.sender: str = template.get("sender")
+    self.initialFilter = template.get("regexFilter", None)
     self.mappings = []
     for mp in template.get("mappings"):
       self.mappings.append(MetricMapping(mp))
@@ -78,7 +79,7 @@ class MailParser(HTMLParser):
     Parses Gmail message payloads and drops unnecessary HTML tags and attributes.
     """
     #? Drop all lines that do not contain a dollar sign
-    if not re.findall(r'\$', data):
+    if self.template.initialFilter and not re.findall(self.template.initialFilter, data):
       return
     #? Remove emoji
     data = emoji.replace_emoji(data, '')

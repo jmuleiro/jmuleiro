@@ -2,6 +2,7 @@
   "templates": [
     {
       "sender": "transaction@belo.app",
+      "regexFilter": "\\$",
       "mappings": [
         {
           "pattern": "^You've transferred \\$(?P<value>\\d{1,}\\.?\\d{1,2}) to (?P<transferee>[a-zA-Z ]{1,}).*$",

@@ -18,6 +18,9 @@
             "type": "string",
             "pattern": "[^@ \\t\\r\\n]+@[^@ \\t\\r\\n]+\\.[^@ \\t\\r\\n]+"
           },
+          "regexFilter": {
+            "$ref": "#/$defs/metricMappingPattern"
+          },
           "mappings": {
             "type": "array",
             "uniqueItems": true,

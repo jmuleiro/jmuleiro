@@ -46,6 +46,57 @@ def init():
     mappings.append(EmailTemplate(template))
   log.debug("Mappings parse successful")
 
+def backwardsLookup(query: str, userId: str, maxResults: str, mappings: list[EmailTemplate]):
+  dateRegex = r"^\d{2}\/\d{2}\/\d{4}$"
+  from datetime import datetime, timedelta
+  if (gmailDateFrom := os.getenv("MAIL_DATE_FROM", False)):
+    if not (re.match(dateRegex, gmailDateFrom)
+            or datetime.strptime(gmailDateFrom, "%m/%d/%Y")): 
+      raise ValueError("Date from should be MM/DD/YYYY")
+  else:
+    gmailDateFrom = (datetime.now() - timedelta(os.getenv("MAIL_FROM_DAYS", 30))).strftime("%m/%d/%Y")
+  gmailQuery += f"after:{gmailDateFrom} "
+  
+  #? If MAIL_DATE_TO is not set lookup everything after gmailDateFrom
+  if (gmailDateTo := os.getenv("MAIL_DATE_TO", False)):
+    if not (re.match(dateRegex, gmailDateFrom)
+            or datetime.strptime(gmailDateTo, "%m/%d/%Y")):
+      raise ValueError("Date to should be MM/DD/YYYY")
+    gmailQuery += f"before:{gmailDateTo} "
+  
+
+def getEmails(apiService: object, query: str, userId: str, maxResults: str):
+  log.debug(f"Getting emails, query: '{query}'")
+  nextPageToken = None
+  resultsCount = 0
+  #? Do/While, we want to get mails list first and then see if a nextPageToken exists
+  while True:
+    log.debug(f"Results iteration no.: '{resultsCount :+= 1}'")
+    response = (apiService
+                .users()
+                .threads()
+                .list(userId=userId, maxResults=maxResults, q=query, pageToken=nextPageToken)
+                .execute())
+    mailThreads = response.get("threads", [])
+    nextPageToken = response.get("nextPageToken", None)
+    
+    if not mailThreads:
+      log.debug("Got no threads")
+      return
+    
+    for mThread in mailThreads:
+      log.debug(f"Getting mail thread '{mThread["id"]}'")
+      yield ((apiService.users().threads().get(userId=userId, id=mThread["id"])).execute())["messages"][0]
+    
+    if nextPageToken:
+      #todo: make configurable (from parameter, this function should not interact with env)
+      sleptSeconds = 1
+      log.debug(f"Got nextPageToken, sleeping for {sleptSeconds} second(s)...")
+      time.sleep(sleptSeconds)
+    else:
+      log.debug("Got to the end of the mail list")
+      return
+
 def main():
   log.debug("Getting credentials")
   creds = None
@@ -75,32 +126,10 @@ def main():
       token.write(creds.to_json())
       log.debug(f"Wrote token file to '{tokenFile}'")
 
+  exitCode = 0
   gmailQuery = ""
   gmailMaxResults = os.getenv("GMAIL_RESULTS_PER_PAGE", "100")
   gmailUserId = os.getenv("GMAIL_USER_ID", "me")
-  if os.getenv("BACKWARDS_LOOKUP", True):
-    dateRegex = r"^\d{2}\/\d{2}\/\d{4}$"
-    log.info("Backwards lookup is enabled")
-    from datetime import datetime, timedelta
-    if (gmailDateFrom := os.getenv("MAIL_DATE_FROM", False)):
-      if not (re.match(dateRegex, gmailDateFrom)
-              or datetime.strptime(gmailDateFrom, "%m/%d/%Y")): 
-        raise ValueError("Date from should be MM/DD/YYYY")
-    else:
-      gmailDateFrom = (datetime.now() - timedelta(os.getenv("MAIL_FROM_DAYS", 30))).strftime("%m/%d/%Y")
-    gmailQuery += f"after:{gmailDateFrom} "
-    
-    #? If MAIL_DATE_TO is not set lookup everything after gmailDateFrom
-    if (gmailDateTo := os.getenv("MAIL_DATE_TO", False)):
-      if not (re.match(dateRegex, gmailDateFrom)
-              or datetime.strptime(gmailDateTo, "%m/%d/%Y")):
-        raise ValueError("Date to should be MM/DD/YYYY")
-      gmailQuery += f"before:{gmailDateTo} "
-  else:
-    log.info("Backwards lookup is disabled")
-    
-  gmailDateTo = os.getenv("GMAIL_DATE_TO", "2024/07/01")
-  exitCode = 0
 
   try:
     #? Prometheus Server
@@ -109,8 +138,14 @@ def main():
     #? Build Gmail API
     log.info("Building Gmail API")
     service = build("gmail", "v1", credentials=creds)
-
+    if os.getenv("BACKWARDS_LOOKUP", True):
+      log.info("Backwards lookup is enabled")
+    else:
+      log.info("Backwards lookup is disabled")
+    
+    #todo: multiple senders (templates) support
     log.debug(f"Iterating over {len(mappings)} templates")
+    #TODO: abstract the mappings loop in a function
     for i, mp in enumerate(mappings):
       log.debug(f"Template n°{i+1}")
       gmailQuery += f"from:{mp.sender} "

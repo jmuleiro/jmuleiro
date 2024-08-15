@@ -63,7 +63,7 @@ class MailParser(HTMLParser):
     self.errorsCount = Counter('mail_exporter_errors', 
                                "Number of mail exporter errors",
                                ("name", "description", "metric"))
-    self.noMatchesCount = Counter('mail_exporter_mismatches',
+    self.mismatchesCount = Counter('mail_exporter_mismatches',
                                   "Number of mail exporter regex mismatches in messages",
                                   ("template"))
   
@@ -104,7 +104,7 @@ class MailParser(HTMLParser):
         self.processMapping(result.groupdict(), mp)
         return
     log.warning(f"No mapping for '{_d}'")
-    self.noMatchesCount.labels({"template": self.template.sender}).inc()
+    self.mismatchesCount.labels({"template": self.template.sender}).inc()
   
   def processMapping(self, result: dict[str, str], mapping: MetricMapping):
     log.debug(f"Processing metric '{mapping.metricName}' type '{type(mapping.metric)}' with values: {result}, result type: {type(result)}")

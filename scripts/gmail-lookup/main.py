@@ -19,7 +19,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 global log
 global mappings
 mappings: list[EmailTemplate] = []
-#todo: implement exporter-like server approach
 
 #? Setup logging
 log = getLogger(os.getenv('LOG_LEVEL', 'DEBUG'))
@@ -46,7 +45,7 @@ def init():
     mappings.append(EmailTemplate(template))
   log.debug("Mappings parse successful")
 
-def backwardsLookup(apiService: object, mappings: list[EmailTemplate], query: str, userId: str, maxResults: str):
+def backwardsLookup(apiService: object, mappings: list[EmailTemplate], parser: MailParser, query: str, userId: str, maxResults: str):
   dateRegex = r"^\d{2}\/\d{2}\/\d{4}$"
   from datetime import datetime, timedelta
   if (gmailDateFrom := os.getenv("MAIL_DATE_FROM", False)):
@@ -63,20 +62,24 @@ def backwardsLookup(apiService: object, mappings: list[EmailTemplate], query: st
             or datetime.strptime(gmailDateTo, "%m/%d/%Y")):
       raise ValueError("Date to should be MM/DD/YYYY")
     query += f"before:{gmailDateTo} "
-  processMappings(apiService, mappings, query, userId, maxResults)
+  processMappings(apiService, mappings, parser, query, userId, maxResults, True)
   log.info("Backwards lookup done")
 
-def processMappings(apiService: object, mappings: list[EmailTemplate], query: str, userId: str, maxResults: str):
+def processMappings(apiService: object, mappings: list[EmailTemplate], parser: MailParser, query: str, userId: str, maxResults: str, backwardsLookup: bool = False):
   #todo: multiple senders (templates) support
   log.debug(f"Iterating over {len(mappings)} templates")
   for index, template in enumerate(mappings):
     log.debug(f"Template n°{index+1}")
     finalQuery = query + f"from:{template.sender} "
     log.debug(f"Gmail Query: '{finalQuery}', maxResults: '{maxResults}', userId: '{userId}'")
-    parser = MailParser(template)
+    parser.template = template
     log.debug("Iterating over results")
     for message in getEmails(apiService, finalQuery, userId, maxResults):
       parser.timestamp = message["internalDate"]
+      #todo use period in seconds global instead of hardcoded value
+      if not (backwardsLookup or parser.timestamp / 1000 < time.time() - 30):
+        log.debug(f"Skipping message because it was older than {30} seconds")
+        continue
       parser.feed(base64.urlsafe_b64decode(message["payload"]["body"]["data"]).decode())
 
 def getEmails(apiService: object, query: str, userId: str, maxResults: str):
@@ -153,14 +156,22 @@ def main():
     #? Build Gmail API
     log.info("Building Gmail API")
     service = build("gmail", "v1", credentials=creds)
+    parser = MailParser()
     if os.getenv("BACKWARDS_LOOKUP", True):
       log.info("Backwards lookup is enabled")
-      backwardsLookup(service, mappings, gmailQuery, gmailUserId, gmailMaxResults)
+      backwardsLookup(service, mappings, parser, gmailQuery, gmailUserId, gmailMaxResults)
     else:
       log.info("Backwards lookup is disabled")
     
-    #todo: periodically processMappings()
-    time.sleep(3600)
+    period = float(os.getenv("MAIL_EXPORTER_PERIOD_SECONDS", 30))
+    newerThanHours = os.getenv("MAIL_EXPORTER_NEWER_THAN_HOURS", 1)
+    log.info(f"Watching {len(mappings)} template(s) every {period} seconds")
+    while True:
+      log.debug(f"Looking for messages in the last {newerThanHours} hour(s)")
+      query = gmailQuery + f"newer_than:{newerThanHours}h "
+      processMappings(service, mappings, parser, query, gmailUserId, gmailMaxResults)
+      log.debug(f"Sleeping {period}s...")
+      time.sleep(period)
     
   except HttpError as e:
     log.critical(f"HttpError: {e}")

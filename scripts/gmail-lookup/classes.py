@@ -56,15 +56,15 @@ class MetricMapping:
                             labelnames=self.labels + ["timestamp"])
 
 class MailParser(HTMLParser):
-  def __init__(self, template: EmailTemplate, *, convert_charrefs: bool = True) -> None:
+  def __init__(self, *, convert_charrefs: bool = True) -> None:
     super().__init__(convert_charrefs=convert_charrefs)
-    self.template = template
     
     #? Internal metrics
     self.errorsCount = Counter('mail_exporter_errors', 
                                "Number of mail exporter errors",
                                ("name", "description", "metric"))
   
+  #? Timestamp property
   def get_timestamp(self):
     return self._timestamp
   
@@ -73,6 +73,15 @@ class MailParser(HTMLParser):
     self._timestamp = value
 
   timestamp = property(get_timestamp, set_timestamp)
+
+  #? Template property
+  def get_template(self) -> EmailTemplate:
+    return self._template
+  
+  def set_template(self, value: EmailTemplate):
+    self._template = value
+  
+  template = property(get_template, set_template)
 
   def handle_data(self, data: str):
     """

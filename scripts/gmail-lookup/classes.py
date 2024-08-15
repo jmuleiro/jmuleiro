@@ -50,7 +50,7 @@ class MetricMapping:
         self.metric = Enum(mapping.get("metric").get("name"),
                               self.description,
                               labelnames=self.labels + ["timestamp"])
-      case "gauge" | _:
+      case "gauge":
         self.metric = GaugeTs(mapping.get("metric").get("name"), 
                             self.description,
                             labelnames=self.labels + ["timestamp"])
@@ -63,25 +63,26 @@ class MailParser(HTMLParser):
     self.errorsCount = Counter('mail_exporter_errors', 
                                "Number of mail exporter errors",
                                ("name", "description", "metric"))
+    self.noMatchesCount = Counter('mail_exporter_mismatches',
+                                  "Number of mail exporter regex mismatches in messages",
+                                  ("template"))
   
   #? Timestamp property
-  def get_timestamp(self):
+  @property
+  def timestamp(self):
     return self._timestamp
-  
-  def set_timestamp(self, value):
+  @timestamp.setter
+  def timestamp(self, value):
     # todo: validation
     self._timestamp = value
 
-  timestamp = property(get_timestamp, set_timestamp)
-
   #? Template property
-  def get_template(self) -> EmailTemplate:
+  @property
+  def template(self) -> EmailTemplate:
     return self._template
-  
-  def set_template(self, value: EmailTemplate):
+  @template.setter
+  def template(self, value: EmailTemplate):
     self._template = value
-  
-  template = property(get_template, set_template)
 
   def handle_data(self, data: str):
     """
@@ -103,6 +104,7 @@ class MailParser(HTMLParser):
         self.processMapping(result.groupdict(), mp)
         return
     log.warning(f"No mapping for '{_d}'")
+    self.noMatchesCount.labels({"template": self.template.sender}).inc()
   
   def processMapping(self, result: dict[str, str], mapping: MetricMapping):
     log.debug(f"Processing metric '{mapping.metricName}' type '{type(mapping.metric)}' with values: {result}, result type: {type(result)}")
@@ -115,6 +117,7 @@ class MailParser(HTMLParser):
     self.updateMetric(mapping, result, value)
   
   def updateMetric(self, mapping: MetricMapping, labels: dict[str, str], value: float = 1):
+    #todo: support other metric types aside from gauge
     match mapping.metric:
       case Counter():
         pass

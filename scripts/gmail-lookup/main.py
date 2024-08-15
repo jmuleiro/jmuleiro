@@ -46,7 +46,7 @@ def init():
     mappings.append(EmailTemplate(template))
   log.debug("Mappings parse successful")
 
-def backwardsLookup(query: str, userId: str, maxResults: str, mappings: list[EmailTemplate]):
+def backwardsLookup(apiService: object, mappings: list[EmailTemplate], query: str, userId: str, maxResults: str):
   dateRegex = r"^\d{2}\/\d{2}\/\d{4}$"
   from datetime import datetime, timedelta
   if (gmailDateFrom := os.getenv("MAIL_DATE_FROM", False)):
@@ -55,15 +55,29 @@ def backwardsLookup(query: str, userId: str, maxResults: str, mappings: list[Ema
       raise ValueError("Date from should be MM/DD/YYYY")
   else:
     gmailDateFrom = (datetime.now() - timedelta(os.getenv("MAIL_FROM_DAYS", 30))).strftime("%m/%d/%Y")
-  gmailQuery += f"after:{gmailDateFrom} "
+  query += f"after:{gmailDateFrom} "
   
   #? If MAIL_DATE_TO is not set lookup everything after gmailDateFrom
   if (gmailDateTo := os.getenv("MAIL_DATE_TO", False)):
     if not (re.match(dateRegex, gmailDateFrom)
             or datetime.strptime(gmailDateTo, "%m/%d/%Y")):
       raise ValueError("Date to should be MM/DD/YYYY")
-    gmailQuery += f"before:{gmailDateTo} "
-  
+    query += f"before:{gmailDateTo} "
+  processMappings(apiService, mappings, query, userId, maxResults)
+  log.info("Backwards lookup done")
+
+def processMappings(apiService: object, mappings: list[EmailTemplate], query: str, userId: str, maxResults: str):
+  #todo: multiple senders (templates) support
+  log.debug(f"Iterating over {len(mappings)} templates")
+  for index, template in enumerate(mappings):
+    log.debug(f"Template n°{index+1}")
+    finalQuery = query + f"from:{template.sender} "
+    log.debug(f"Gmail Query: '{finalQuery}', maxResults: '{maxResults}', userId: '{userId}'")
+    parser = MailParser(template)
+    log.debug("Iterating over results")
+    for message in getEmails(apiService, finalQuery, userId, maxResults):
+      parser.timestamp = message["internalDate"]
+      parser.feed(base64.urlsafe_b64decode(message["payload"]["body"]["data"]).decode())
 
 def getEmails(apiService: object, query: str, userId: str, maxResults: str):
   log.debug(f"Getting emails, query: '{query}'")
@@ -86,6 +100,7 @@ def getEmails(apiService: object, query: str, userId: str, maxResults: str):
     
     for mThread in mailThreads:
       log.debug(f"Getting mail thread '{mThread["id"]}'")
+      #todo: are multiple messages possible?
       yield ((apiService.users().threads().get(userId=userId, id=mThread["id"])).execute())["messages"][0]
     
     if nextPageToken:
@@ -140,39 +155,11 @@ def main():
     service = build("gmail", "v1", credentials=creds)
     if os.getenv("BACKWARDS_LOOKUP", True):
       log.info("Backwards lookup is enabled")
+      backwardsLookup(service, mappings, gmailQuery, gmailUserId, gmailMaxResults)
     else:
       log.info("Backwards lookup is disabled")
     
-    #todo: multiple senders (templates) support
-    log.debug(f"Iterating over {len(mappings)} templates")
-    #TODO: abstract the mappings loop in a function
-    for i, mp in enumerate(mappings):
-      log.debug(f"Template n°{i+1}")
-      gmailQuery += f"from:{mp.sender} "
-      log.debug(f"Gmail Query: '{gmailQuery}', maxResults: '{gmailMaxResults}', userId: '{gmailUserId}'")
-      nextPageToken = None
-      log.debug("Creating new parser")
-      parser = MailParser(mp)
-      log.debug("Iterating over results")
-      resultsCount = 0
-      while True:
-        log.debug(f"Results iteration no.: '{resultsCount :+= 1}'")
-        response = service.users().threads().list(userId=gmailUserId, maxResults=gmailMaxResults, q=gmailQuery, pageToken=nextPageToken).execute()
-        threads = response.get("threads", [])
-        for thread in threads:
-          data = (service.users().threads().get(userId=gmailUserId, id=thread["id"])).execute()
-          parser.timestamp = data["messages"][0]["internalDate"]
-          parser.feed(base64.urlsafe_b64decode(data["messages"][0]["payload"]["body"]["data"]).decode())
-
-        nextPageToken = response.get("nextPageToken", None)
-        log.debug(f"NextPageToken: {nextPageToken}")
-        if nextPageToken:
-          sleptSeconds = 1
-          log.info(f"Sleeping for {sleptSeconds} second(s)...")
-          time.sleep(sleptSeconds)
-        else:
-          log.info("Got to the end of the list")
-          break
+    #todo: periodically processMappings()
     time.sleep(3600)
     
   except HttpError as e:

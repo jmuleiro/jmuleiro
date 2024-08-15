@@ -2,7 +2,6 @@ import re
 import emoji
 import logging as log
 from html.parser import HTMLParser
-from typing import Union, overload
 from prometheus_client import Counter, Gauge, Summary, Histogram, Info, Enum
 
 class EmailTemplate:

@@ -27,28 +27,27 @@ class MetricMapping:
     self.metricName = mapping.get("metric").get("name")
     #todo: add schema properties for metric attributes 
     #todo: i.e. namespace, unit, etc.
-    #todo: add states for enum type
     match mapping.get("metric").get("type", "gauge"):
       case "counter":
-        self.metric = Counter(mapping.get("metric").get("name"), 
+        self.metric = CounterTs(mapping.get("metric").get("name"), 
                               self.description, 
                               labelnames=self.labels + ["timestamp"])
       case "summary":
-        self.metric = Summary(mapping.get("metric").get("name"),
+        self.metric = SummaryTs(mapping.get("metric").get("name"),
                               self.description,
                               labelnames=self.labels + ["timestamp"])
       case "histogram":
-        self.metric = Histogram(mapping.get("metric").get("name"),
+        self.metric = HistogramTs(mapping.get("metric").get("name"),
                               self.description,
                               labelnames=self.labels + ["timestamp"])
       case "info":
-        self.metric = Info(mapping.get("metric").get("name"),
-                              self.description,
-                              labelnames=self.labels + ["timestamp"])
+        self.metric = InfoTs(mapping.get("metric").get("name"),
+                              self.description)
       case "enum":
-        self.metric = Enum(mapping.get("metric").get("name"),
+        self.metric = EnumTs(mapping.get("metric").get("name"),
                               self.description,
-                              labelnames=self.labels + ["timestamp"])
+                              labelnames=self.labels + ["timestamp"],
+                              states=mapping.get("metric").get("states"))
       case "gauge":
         self.metric = GaugeTs(mapping.get("metric").get("name"), 
                             self.description,
@@ -87,7 +86,7 @@ class MailParser(HTMLParser):
     """
     Parses Gmail message payloads and drops unnecessary HTML tags and attributes.
     """
-    #? Drop all lines that do not contain a dollar sign
+    #? Drop all lines that match the initial filter
     if self.template.initialFilter and not re.findall(self.template.initialFilter, data):
       return
     #? Remove emoji
@@ -111,25 +110,19 @@ class MailParser(HTMLParser):
       log.error(f"Labels and capturing groups mismatch: Got {len(mapping.labels)} labels but {len(result)} groups (including value)")
       self.errorsCount.labels(name=mapping.metricName, description=mapping.description, metric=mapping.metric._name).inc()
       return
-    
-    value = float(result.pop("value"))
-    self.updateMetric(mapping, result, value)
-  
-  def updateMetric(self, mapping: MetricMapping, labels: dict[str, str], value: float = 1):
-    #todo: support other metric types aside from gauge
+
     match mapping.metric:
-      case Counter():
-        pass
-      case Summary():
-        pass
-      case Histogram():
-        pass
-      case Info():
-        pass
-      case Enum():
-        pass
-      case GaugeTs():
-        mapping.metric.incTimestamped(labels, value, self.timestamp)
+      case CounterTs() | GaugeTs():
+        value = float(result.pop("value"))
+        mapping.metric.incTimestamped(result, value, self.timestamp)
+      case HistogramTs() | SummaryTs():
+        value = float(result.pop("value"))
+        mapping.metric.observeTimestamped(result, value, self.timestamp)
+      case InfoTs():
+        mapping.metric.infoTimestamped(result, self.timestamp)
+      case EnumTs():
+        state = result.pop("state")
+        mapping.metric.stateTimestamped(result, state, self.timestamp)
 
 class GaugeTs(Gauge):
   def __init__(self, *args, **kwargs):
@@ -150,9 +143,116 @@ class GaugeTs(Gauge):
     """
     Increments timestamped gauge with labels
     """
-    log.debug(f"Increment timestamped gauge labels: {labels}, value: {value}, timestamp: {timestamp}")
     labels.update({
       "timestamp": timestamp
     })
     self.labels(**labels).inc(value)
+
+class CounterTs(Counter):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, *kwargs)
+
+  def collect(self):
+    metrics = super().collect()
+    for metric in metrics:
+      samples = []
+      for sample in metric.samples:
+        timestamp = sample.labels.pop("timestamp", None)
+        samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
+      metric.samples = samples
+    return metrics
   
+  def incTimestamped(self, labels: dict[str, str], value: float, timestamp):
+    """
+    Increments timestamped counter with labels
+    """
+    labels.update({
+      "timestamp": timestamp
+    })
+    self.labels(**labels).inc(value)
+
+class HistogramTs(Histogram):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, *kwargs)
+  
+  def collect(self):
+    metrics = super().collect()
+    for metric in metrics:
+      samples = []
+      for sample in metric.samples:
+        timestamp = sample.labels.pop("timestamp", None)
+        samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
+      metric.samples = samples
+    return metrics
+  
+  def observeTimestamped(self, labels: dict[str, str], value: float, timestamp):
+    """
+    Observes timestamped value
+    """
+    labels.update({
+      "timestamp": timestamp
+    })
+    self.labels(**labels).observe(value)
+
+class SummaryTs(Summary):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, *kwargs)
+  
+  def collect(self):
+    metrics = super().collect()
+    for metric in metrics:
+      samples = []
+      for sample in metric.samples:
+        timestamp = sample.labels.pop("timestamp", None)
+        samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
+      metric.samples = samples
+    return metrics
+  
+  def observeTimestamped(self, labels: dict[str, str], value: float, timestamp):
+    """
+    Observes timestamped value
+    """
+    labels.update({
+      "timestamp": timestamp
+    })
+    self.labels(**labels).observe(value)
+
+class InfoTs(Info):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, *kwargs)
+  
+  def collect(self):
+    metrics = super().collect()
+    for metric in metrics:
+      samples = []
+      for sample in metric.samples:
+        timestamp = sample.labels.pop("timestamp", None)
+        samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
+      metric.samples = samples
+    return metrics
+  
+  def infoTimestamped(self, labels: dict[str, str], timestamp):
+    labels.update({
+      "timestamp":  timestamp
+    })
+    self.info(labels)
+
+class EnumTs(Enum):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, *kwargs)
+  
+  def collect(self):
+    metrics = super().collect()
+    for metric in metrics:
+      samples = []
+      for sample in metric.samples:
+        timestamp = sample.labels.pop("timestamp", None)
+        samples.append(type(sample)(sample.name, sample.labels, sample.value, timestamp, sample.exemplar))
+      metric.samples = samples
+    return metrics
+  
+  def stateTimestamped(self, labels: dict[str, str], state: str, timestamp):
+    labels.update({
+      "timestamp": timestamp
+    })
+    self.labels(**labels).state(state)

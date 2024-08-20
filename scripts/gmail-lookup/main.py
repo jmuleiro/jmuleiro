@@ -182,6 +182,8 @@ class MailExporter():
       with open(tokenFile, "w") as token:
         token.write(creds.to_json())
         self.log.debug(f"Wrote token file to '{tokenFile}'")
+    else:
+      self.log.debug("Credentials are valid")
 
     exitCode = 0
     gmailQuery = ""
@@ -225,6 +227,6 @@ class MailExporter():
       exit(exitCode)
 
 if __name__ == "__main__":
-  exporter = MailExporter()
+  exporter = MailExporter(os.getenv("LOG_LEVEL"))
   exporter.bootstrap()
   exporter.main()

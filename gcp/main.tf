@@ -27,6 +27,13 @@ resource "google_project_service" "iam" {
   disable_on_destroy = false
 }
 
+resource "google_project_service" "iap" {
+  project = var.project
+  service = "iap.googleapis.com"
+  disable_dependent_services = false
+  disable_on_destroy = false
+}
+
 resource "google_project_service" "gce" {
   project = var.project
   service = "compute.googleapis.com"
@@ -185,20 +192,20 @@ resource "google_compute_network" "gke-network" {
 
 resource "google_compute_subnetwork" "gke-subnet" {
   name = "gke-subnet"
-  # Usable Host IP Range:	10.10.0.1 - 10.10.63.254
-  ip_cidr_range = "10.10.0.0/18" 
+  # Usable Host IP Range:	10.10.0.1 - 10.10.7.255
+  ip_cidr_range = "10.10.0.0/24" 
   network = google_compute_network.gke-network.id
   
   secondary_ip_range {
     range_name = local.pods_range_name
-    # Usable Host IP Range:	10.10.8.1 - 10.10.15.254
-    ip_cidr_range = "10.10.10.0/21"
+    # Usable Host IP Range:	10.10.8.0 - 10.10.15.255
+    ip_cidr_range = "10.20.0.0/21"
   }
 
   secondary_ip_range {
     range_name = local.services_range_name
     # Usable Host IP Range:	10.10.16.1 - 10.10.23.254
-    ip_cidr_range = "10.10.20.0/21"
+    ip_cidr_range = "10.30.0.0/21"
   }
 }
 #TODO: review if this is necessary or it could be done some other way
@@ -366,6 +373,9 @@ resource "google_container_node_pool" "prod-main-0" {
       "https://www.googleapis.com/auth/monitoring"
     ]
   }
+  timeouts {
+    create = "12m"
+  }
 }
 
 resource "google_container_node_pool" "prod-main-1" {
@@ -406,6 +416,9 @@ resource "google_container_node_pool" "prod-main-1" {
       "https://www.googleapis.com/auth/logging.write",
       "https://www.googleapis.com/auth/monitoring"
     ]
+  }
+  timeouts {
+    create = "12m"
   }
 }
 

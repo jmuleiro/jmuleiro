@@ -65,7 +65,7 @@ variable "alcanza_ip" {
 variable "cluster_version" {
   type = string
   description = "Google Kubernetes Engine cluster master version"
-  default = "1.26.5-gke.1200"
+  default = "1.26.5-gke.2100"
 }
 variable "cluster_ip_whitelist" {
   type = list(string)

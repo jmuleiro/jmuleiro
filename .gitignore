@@ -43,3 +43,9 @@ token.json
 
 # Python
 __pycache__
+
+# Virtual env
+venv
+
+# PDFs
+*.pdf
